@@ -67,6 +67,8 @@ OneButton btnA(G39, true);
 OneButton btnB(G37, true);
 Servo servo;
 
+#define MAX_TIMERS      5
+
 class DeltaTime {
 public:
     DeltaTime() {
