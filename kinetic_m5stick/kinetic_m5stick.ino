@@ -17,7 +17,9 @@
 #include <OneButton.h>
 #include <M5StickC.h>
 #include <EEPROM.h>
+//#include <DeltaTime.h>
 
+#define DEBUG
 #define SERVO_270
 
 // PINS
@@ -28,7 +30,9 @@
 
 #define EEPROM_SIZE 1
 
-#define PRESSURE_MAX   600 // could be 1200   
+#define PRESSURE_MAX    600 // could be 1200
+#define PROGRESSBAR_MIN 0
+#define PROGRESSBAR_MAX 127
 
 // DMS check maximum closing block
 //#define Y_OFFSET(x) (15+(127-x))
@@ -62,6 +66,52 @@ int lastState = LOW;
 OneButton btnA(G39, true);
 OneButton btnB(G37, true);
 Servo servo;
+
+class DeltaTime {
+public:
+    DeltaTime() {
+        for (int i=0; i< MAX_TIMERS; i++)
+            last_ticks[i] = 0;
+#if defined (STM32F2XX)  // Photon     
+        ticks_per_micro = System.ticksPerMicrosecond();
+#else
+    ticks_per_micro = 1;
+#endif
+    }
+    void start(int i) {
+#if defined (STM32F2XX) // Photon
+    last_ticks[i] = System.ticks();
+#else
+    last_ticks[i] = micros();
+#endif
+    }
+
+    uint32_t delta(int i) {
+#if defined (STM32F2XX) // Photon   
+        uint32_t current_ticks = System.ticks();
+#else
+    uint32_t current_ticks = micros();
+#endif
+        if (last_ticks[i] != 0) {
+            uint32_t _d = (current_ticks - last_ticks[i])/ticks_per_micro;
+            last_ticks[i] = current_ticks;
+      if (current_ticks < last_ticks[i]) // normalize
+        return (UINT32_MAX - _d);
+      else
+        return _d;
+        } else
+            last_ticks[i] = current_ticks;
+
+    
+        return 0;
+    }
+
+private:
+    uint32_t last_ticks[MAX_TIMERS];  
+    double ticks_per_micro = 0;
+};
+
+DeltaTime interval;
 
 void updateCalibration(int value)
 {
@@ -185,31 +235,6 @@ void setLED(bool isON)
   digitalWrite (LED_PIN, !isON); // set the LED
 }
 
-void progressBar(int value, bool ledon)
-{
-  // update LED
-  setLED(ledon);
-
-  if (value > 20) {
-      // DMS check maximum closing block
-      // M5.Axp.ScreenBreath(10);
-      M5.Axp.ScreenBreath(11);
-   
-  } else {
-      // DMS check maximum closing block
-      //M5.Axp.ScreenBreath(8);
-      M5.Axp.ScreenBreath(9);
-  }
-  
-  // Value expected below must be in the range 0-127
-  if (value > 127)
-    value = 127;
-    
-  for (int i = 0; i <= 128; i++) {  //draw bar
-    M5.Lcd.fillRect(8, 142-i, 15, 1, (i <= value) ? rainbow(i) : BLACK);
-  }
-}
-
 unsigned int rainbow(int value)
 {
   // Value is expected to be in range 0-127
@@ -242,6 +267,48 @@ unsigned int rainbow(int value)
     red = 31;
   }
   return (red << 11) + (green << 5) + blue;
+}
+
+void progressBar(int p, bool ledon)
+{
+  // update LED
+  setLED(ledon);
+
+  if (p > 20) {
+      // DMS check maximum closing block
+      // M5.Axp.ScreenBreath(10);
+      M5.Axp.ScreenBreath(11);
+   
+  } else {
+      // DMS check maximum closing block
+      //M5.Axp.ScreenBreath(8);
+      M5.Axp.ScreenBreath(9);
+  }
+
+  int value = map(p, 0, PRESSURE_MAX, PROGRESSBAR_MIN, PROGRESSBAR_MAX);
+    
+  for (int i = 0; i <= 128; i++) {  //draw bar
+    M5.Lcd.fillRect(8, 142-i, 15, 1, (i <= value) ? rainbow(i) : BLACK);
+  }
+}
+
+int getPressure() {
+    // logic
+  int raw_pressure = analogRead(SENSOR_PIN);
+
+  // normalized pressure
+  return (raw_pressure < PRESSURE_MAX) ? raw_pressure : PRESSURE_MAX;
+}
+
+void updateServo(int pressure) {
+  
+  if (pressure > setpoint) {
+      corsaservo = map(setpoint, 0, PRESSURE_MAX, SERVO_MIN, SERVO_MAX);  //limite impostabile
+  } else {
+      corsaservo = map(pressure, 0, PRESSURE_MAX, SERVO_MIN, SERVO_MAX);
+  }
+
+  servo.write(corsaservo);  
 }
 
 void setup() {
@@ -280,22 +347,14 @@ void loop () {
   btnA.tick();
   btnB.tick();
 
-  // logic
-  int raw_pressure = analogRead(SENSOR_PIN);
+  pressure = getPressure();
 
-  pressure = map((raw_pressure < PRESSURE_MAX) ? raw_pressure : PRESSURE_MAX, 0, PRESSURE_MAX, 0, 254);
+  // update progress bar and led state
+  progressBar(pressure, pressure > setpoint);  
 
-  if (pressure > setpoint) {
-      state = true;
-      corsaservo = setpoint;  //limite impostabile
-  } else {
-      state = false;
-      corsaservo = pressure;
-  }
-  progressBar(pressure, state);  //show reading on progressbar and led
+  updateServo(pressure);
 
-  servo.write(corsaservo);
-
+#ifdef DEBUG
   Serial.println(pressure);
 
   // print count when there is a low/high transition (pressure above threshold)
@@ -305,4 +364,5 @@ void loop () {
       Serial.println(count);
   }
   lastState=state;
+#endif
 }  
