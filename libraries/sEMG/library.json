@@ -1,0 +1,29 @@
+{
+  "name": "SEMG",
+  "version": "1.0.0",
+  "keywords": "emg",
+  "description": "This library provides facilities to process EMG signals.",
+  "authors":
+  {
+    "name":  "Alberto Navatta",
+    "url":   "https://github.com/TBA",
+    "maintainer": true
+  },
+  "repository":
+  {
+    "type": "git",
+    "url": "//https://github.com/TBA"
+  },
+  "homepage": "https://github.com/TBA",
+  "export": {
+    "exclude": [
+      "linux",
+      "extras",
+      "tests"
+    ]
+  },
+  "frameworks": "*",
+  "platforms": ["mbed", "nrf52"],
+  "examples": "examples/*/*/*.ino",
+  "license": "MIT"
+}

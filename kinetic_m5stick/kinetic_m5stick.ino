@@ -20,12 +20,12 @@
 
 #define SERVO_270
 
-// PIN of servo
+// PINS
 #define SERVO_PIN   G26
 #define LED_PIN     G10
 #define SENSOR_PIN  G36
-
 //#define SERVO_FINGERS_PIN 2
+
 #define EEPROM_SIZE 1
 
 #define PRESSURE_MAX   600 // could be 1200   
@@ -39,13 +39,14 @@
 // for servo 270 degrees maximum lever 6-7mm
 #define SERVO_MAX 	254
 #define SERVO_MIN	  1
+#else // SERVO_270
 
-#else
 #ifdef SERVO_180
 // servo 180 degrees maximum lever 11-12mm
 #define SERVO_MAX 	150
 #define SERVO_MIN	  60
 #endif // SERVO_180
+
 #endif // SERVO_270
 
 RTC_TimeTypeDef RTC_TimeStruct;
