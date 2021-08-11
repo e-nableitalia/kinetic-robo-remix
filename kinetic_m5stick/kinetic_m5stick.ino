@@ -19,34 +19,46 @@
 #include <EEPROM.h>
 //#include <DeltaTime.h>
 
+// global defines
 #define DEBUG
 #define SERVO_270
+
+#define MODE_PROGRESSIVE  1
+#define MODE_HOLDTIME     2
+#define LOOP_DELAY        50 // delay main loop of 10 mS, to keep higher pressure sample rate and delay hand opening it is also possible to use a servo increment prescaler (feature to be evaluated)
+#define EEPROM_SIZE       1
+#define INTERVAL_OPEN     0   // hand open interval id, used to calculate hold time since first muscle contraction -> activate hand/servo closure
+#define INTERVAL_CLOSE    1   // hand close interval id, used to calculate hold time since first muscle contraction -> trigger hand open operation
+#define HOLDTIME_INTERVAL_uS   (250 * 1000)  // 250 ms, hold time
+#define PRESSURE_MAX      600           // could be 1200
+#define PRESSURE_MIN      10            // min pressure value to trigger hand closure/opening
+#define PROGRESSBAR_MIN   0
+#define PROGRESSBAR_MAX   127
+#define FORMAT_BUFFERSIZE 1024
+// DMS 
+// progress bar Y offset
+//#define Y_OFFSET(x) (15+(127-x))
+#define Y_OFFSET(x) (15+(254-x))
 
 // PINS
 #define SERVO_PIN   G26
 #define LED_PIN     G10
 #define SENSOR_PIN  G36
-//#define SERVO_FINGERS_PIN 2
 
-#define EEPROM_SIZE 1
+#ifdef DEBUG
+#define _DEBUG(...)   console_debug(__func__, __VA_ARGS__)
+#else
+#degine _DEBUG(...)
+#endif
 
-#define PRESSURE_MAX    600 // could be 1200
-#define PROGRESSBAR_MIN 0
-#define PROGRESSBAR_MAX 127
-
-// DMS check maximum closing block
-//#define Y_OFFSET(x) (15+(127-x))
-#define Y_OFFSET(x) (15+(254-x))
-
-
-#ifdef SERVO_270
 // for servo 270 degrees maximum lever 6-7mm
+#ifdef SERVO_270
 #define SERVO_MAX 	254
 #define SERVO_MIN	  1
 #else // SERVO_270
 
-#ifdef SERVO_180
 // servo 180 degrees maximum lever 11-12mm
+#ifdef SERVO_180
 #define SERVO_MAX 	150
 #define SERVO_MIN	  60
 #endif // SERVO_180
@@ -55,18 +67,48 @@
 
 RTC_TimeTypeDef RTC_TimeStruct;
 
-int pressure = 6;    // between 0-127 from FSR reading
+// value of pressure sensor
+int pressure = 6;
+
+// possible hand states, default IDLE_OPEN
+enum _hand_state {
+  IDLE_OPEN = 0,
+  HOLD_OPENING,
+  OPENING,
+  HOLD_CLOSING,
+  CLOSING,
+  IDLE_CLOSED
+} hand_state = IDLE_OPEN;
+
+char *_state[] = {
+  "IDLE_OPEN",
+  "HOLD_OPENING",
+  "OPENING",
+  "HOLD_CLOSING",
+  "CLOSING",
+  "IDLE_CLOSED",
+  0
+};
+
+// current servo angle
+int servo_angle = 0;
+
+// max servo angle
+int servo_max_angle = SERVO_MAX;
+
+// hand mode
+int mode = MODE_HOLDTIME;
+
+// console output format buffer
+char format_buffer[FORMAT_BUFFERSIZE];
+
 int setpoint = 240;  // deault, updated by EEPROM
 int corsaservo = 0;
 int count = 0;
 int state = LOW;
 int lastState = LOW;
 
-//Object initialization
-OneButton btnA(G39, true);
-OneButton btnB(G37, true);
-Servo servo;
-
+// DeltaTime class, measures intervals in microseconds
 #define MAX_TIMERS      5
 
 class DeltaTime {
@@ -77,14 +119,14 @@ public:
 #if defined (STM32F2XX)  // Photon     
         ticks_per_micro = System.ticksPerMicrosecond();
 #else
-    ticks_per_micro = 1;
+        ticks_per_micro = 1;
 #endif
     }
     void start(int i) {
 #if defined (STM32F2XX) // Photon
-    last_ticks[i] = System.ticks();
+      last_ticks[i] = System.ticks();
 #else
-    last_ticks[i] = micros();
+      last_ticks[i] = micros();
 #endif
     }
 
@@ -92,19 +134,18 @@ public:
 #if defined (STM32F2XX) // Photon   
         uint32_t current_ticks = System.ticks();
 #else
-    uint32_t current_ticks = micros();
+        uint32_t current_ticks = micros();
 #endif
         if (last_ticks[i] != 0) {
             uint32_t _d = (current_ticks - last_ticks[i])/ticks_per_micro;
             last_ticks[i] = current_ticks;
-      if (current_ticks < last_ticks[i]) // normalize
-        return (UINT32_MAX - _d);
-      else
-        return _d;
+            if (current_ticks < last_ticks[i]) // normalize
+              return (UINT32_MAX - _d);
+            else
+              return _d;
         } else
             last_ticks[i] = current_ticks;
 
-    
         return 0;
     }
 
@@ -113,6 +154,79 @@ private:
     double ticks_per_micro = 0;
 };
 
+// Serial debug function
+// print function name and formatted text
+// accepted format arguments:
+// %d, %i -> integer
+// %s -> string
+void console_debug(const char *function, const char *format_str, ...) {
+  
+    va_list argp;
+    va_start(argp, format_str);
+    char *bp=format_buffer;
+    int bspace = FORMAT_BUFFERSIZE - 1;
+
+    while ((*function) && (bspace)) {
+      *bp++ = *function++;
+      --bspace;
+    }
+
+    *bp++ = ':';
+    --bspace;
+    *bp++ = ' ';
+    --bspace;
+
+    while (*format_str != '\0' && bspace > 0) {
+      if (*format_str != '%') {
+        *bp++ = *format_str++;
+        --bspace;
+      } else if (format_str[1] == '%') // An "escaped" '%' (just print one '%').
+      {
+        *bp++ = *format_str++;    // Store first %
+        ++format_str;             // but skip second %
+        --bspace;
+      } else {
+         ++format_str;
+        // parse format
+        switch (*format_str) {
+          case 's': {
+            // string
+            char *str = va_arg (argp, char *);
+            while ((*str) && (bspace)) {
+              *bp++ = *str++;
+              --bspace;
+            }
+          };
+          break;
+          case 'd': case 'i': {
+            // decimal
+            char ibuffer[16];
+            int val = va_arg (argp, int);
+            snprintf(ibuffer,16,"%d",val);
+            char *str = ibuffer;
+            while ((*str) && (bspace)) {
+              *bp++ = *str++;
+              --bspace;
+            }
+          };
+          break;
+          default: {
+            // skip format
+          }
+        }
+         
+        ++format_str;
+      }
+    }
+    // terminate string
+    *bp = 0;
+    Serial.println(format_buffer);
+}
+
+//Globsl Object initialization
+OneButton btnA(G39, true);
+OneButton btnB(G37, true);
+Servo servo;
 DeltaTime interval;
 
 void updateCalibration(int value)
@@ -302,15 +416,89 @@ int getPressure() {
   return (raw_pressure < PRESSURE_MAX) ? raw_pressure : PRESSURE_MAX;
 }
 
-void updateServo(int pressure) {
+void updateServoProgressive(int pressure) {
   
   if (pressure > setpoint) {
-      corsaservo = map(setpoint, 0, PRESSURE_MAX, SERVO_MIN, SERVO_MAX);  //limite impostabile
+      servo_angle = map(setpoint, 0, PRESSURE_MAX, SERVO_MIN, SERVO_MAX);  //limite impostabile
   } else {
-      corsaservo = map(pressure, 0, PRESSURE_MAX, SERVO_MIN, SERVO_MAX);
+      servo_angle = map(pressure, 0, PRESSURE_MAX, SERVO_MIN, SERVO_MAX);
   }
 
-  servo.write(corsaservo);  
+  servo.write(servo_angle);  
+}
+
+// state update function
+void updateState(int pressure) {
+  
+  _DEBUG("Entering state[%s]",_state[hand_state]);
+  
+  switch (hand_state) {
+      case HOLD_OPENING:
+          if (pressure > PRESSURE_MIN) {
+              _DEBUG("Pressure[%d] > PRESSURE_MIN[%d], check hold interval expired",pressure, PRESSURE_MIN);
+              if (interval.delta(INTERVAL_OPEN) > HOLDTIME_INTERVAL_uS) {
+                  _DEBUG("OPEN hold interval expired, start opening hand");
+                  hand_state = OPENING;
+              }
+          } else {
+              // discard small muscle contraction and return idle
+              _DEBUG("Muscle contraction discarded, inteval too small");
+              hand_state = IDLE_OPEN;
+          }
+          break;
+      case OPENING:
+          if (pressure > PRESSURE_MIN) {
+              _DEBUG("Pressure[%d] > PRESSURE_MIN[%d], check can continue to open hand",pressure, PRESSURE_MIN);
+              if (servo_angle < SERVO_MAX) {
+                  servo_angle++;
+                  _DEBUG("Current servo andle[%d]",servo_angle);
+                  servo.write(servo_angle);
+              } else {
+                  _DEBUG("Current servo angle[%d], hand completely open",servo_angle);
+                  hand_state = IDLE_CLOSED;
+              }
+          } else {
+              _DEBUG("Pressure[%d] < PRESSURE_MIN[%d], stop closing hand",pressure, PRESSURE_MIN);
+              hand_state = IDLE_CLOSED;
+          }
+          break;
+       case HOLD_CLOSING:
+          if (pressure > PRESSURE_MIN) {
+              _DEBUG("Pressure[%d] > PRESSURE_MIN[%d], check can close hand",pressure, PRESSURE_MIN);
+              if (interval.delta(INTERVAL_CLOSE) > HOLDTIME_INTERVAL_uS) {
+                  _DEBUG("CLOSE hold interval expired, closing hand");
+                  hand_state = CLOSING;
+              }
+          } else {
+              // discard small muscle contraction and return idle
+              _DEBUG("Muscle contraction discarded, inteval too small");
+              hand_state = IDLE_CLOSED;
+          }
+          break;
+      case CLOSING:
+          _DEBUG("Closing hand, servo handle -> [%d]",SERVO_MIN);
+          servo.write(SERVO_MIN);
+          hand_state = IDLE_OPEN;
+          break;
+      case IDLE_CLOSED:
+          if (pressure > PRESSURE_MIN) {
+              _DEBUG("Pressure[%d] > PRESSURE_MIN[%d], start hold close timer",pressure, PRESSURE_MIN);
+              hand_state = HOLD_CLOSING;
+              interval.start(INTERVAL_CLOSE);
+          }
+          break;
+      case IDLE_OPEN:
+      default:
+        if (pressure > PRESSURE_MIN) {
+          _DEBUG("Pressure[%d] > PRESSURE_MIN[%d], start hold open timer",pressure, PRESSURE_MIN);
+          hand_state = HOLD_OPENING;
+          interval.start(INTERVAL_OPEN);
+        }
+  }
+
+  // loop delay
+  _DEBUG("Sleeping %d ms",LOOP_DELAY);
+  delay(LOOP_DELAY);
 }
 
 void setup() {
@@ -350,11 +538,15 @@ void loop () {
   btnB.tick();
 
   pressure = getPressure();
+  _DEBUG("Detected Pressure[%d]",pressure);
 
   // update progress bar and led state
   progressBar(pressure, pressure > setpoint);  
 
-  updateServo(pressure);
+  if (mode == MODE_PROGRESSIVE)
+      updateServoProgressive(pressure);
+  else
+      updateState(pressure);
 
 #ifdef DEBUG
   Serial.println(pressure);
