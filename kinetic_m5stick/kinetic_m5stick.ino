@@ -1,7 +1,8 @@
 
-/* M5Stickc Muscle control for prostheses By Praga Michele
+/* M5Stickc & Arduino Nsno 33 BLE Muscle control for KINETIC Hand 
+ * Rev 1.0, Original project, Praga Michele
+ * Rev 1.1, added hold mode and support for Arduino Nano BLE 33, Alberto Navatta
  *  
- * Select servo with corresponding define
  * 
  * 
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
