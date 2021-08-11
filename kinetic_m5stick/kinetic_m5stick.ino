@@ -9,29 +9,61 @@
  * ANY CLAIM, DAMAGES,OR OTHER LIABILITY. YOU AGREE TO USE AT YOUR OWN RISK.
  * Modified from Praga Michele 
 */
-// Required libs:
+// M5StickC Required libs:
 // ESP32 Lite Pack
 // ServoESP32
+// Generic libs:
 // OneButton
+
+#include <stdarg.h>
+#include <stdio.h>
 #include <Servo.h>
 #include <OneButton.h>
-#include <M5StickC.h>
-#include <EEPROM.h>
-//#include <DeltaTime.h>
 
 // global defines
 #define DEBUG
-#define SERVO_270
 
-#define MODE_PROGRESSIVE  1
-#define MODE_HOLDTIME     2
-#define LOOP_DELAY        50 // delay main loop of 10 mS, to keep higher pressure sample rate and delay hand opening it is also possible to use a servo increment prescaler (feature to be evaluated)
+#ifdef ESP32
+#include <M5StickC.h>
+#include <EEPROM.h>
+
+#pragma message("Using ESP32 M5StickC board configuration");
+
+#define M5STICKC
+
+// PINS
+#define SERVO_PIN   G26
+#define LED_PIN     G10
+#define SENSOR_PIN  G36
+#define BUTTONA_PIN G39
+#define BUTTONB_PIN G37
+
+RTC_TimeTypeDef RTC_TimeStruct;
+
+#else // ! ESP32
+#if TARGET_NAME == ARDUINO_NANO33BLE
+
+#pragma message("Using Arduino Nano 33 BLE board configuration");
+
+// PINS
+#define SERVO_PIN   D9
+#define LED_PIN     PIN_LED
+#define SENSOR_PIN  A0
+#define BUTTONA_PIN D0
+#define BUTTONB_PIN D1
+#endif
+#endif
+
+#define SERVO_MAXANGLE    270
+#define MODE_PROGRESSIVE  1   // firmware mode = hold
+#define MODE_HOLDTIME     2   // 
+#define LOOP_DELAY        50  // delay main loop of 10 mS, to keep higher pressure sample rate and delay hand opening it is also possible to use a servo increment prescaler (feature to be evaluated)
 #define EEPROM_SIZE       1
 #define INTERVAL_OPEN     0   // hand open interval id, used to calculate hold time since first muscle contraction -> activate hand/servo closure
 #define INTERVAL_CLOSE    1   // hand close interval id, used to calculate hold time since first muscle contraction -> trigger hand open operation
 #define HOLDTIME_INTERVAL_uS   (250 * 1000)  // 250 ms, hold time
-#define PRESSURE_MAX      600           // could be 1200
-#define PRESSURE_MIN      10            // min pressure value to trigger hand closure/opening
+#define PRESSURE_MAX      600 // could be 1200
+#define PRESSURE_MIN      10  // min pressure value to trigger hand closure/opening
 #define PROGRESSBAR_MIN   0
 #define PROGRESSBAR_MAX   127
 #define FORMAT_BUFFERSIZE 1024
@@ -40,10 +72,7 @@
 //#define Y_OFFSET(x) (15+(127-x))
 #define Y_OFFSET(x) (15+(254-x))
 
-// PINS
-#define SERVO_PIN   G26
-#define LED_PIN     G10
-#define SENSOR_PIN  G36
+
 
 #ifdef DEBUG
 #define _DEBUG(...)   console_debug(__func__, __VA_ARGS__)
@@ -52,20 +81,16 @@
 #endif
 
 // for servo 270 degrees maximum lever 6-7mm
-#ifdef SERVO_270
+#if (SERVO_MAXANGLE == 270)
 #define SERVO_MAX 	254
 #define SERVO_MIN	  1
-#else // SERVO_270
+#endif // SERVO 270°
 
 // servo 180 degrees maximum lever 11-12mm
-#ifdef SERVO_180
+#if (SERVO_MAXANGLE == 180)
 #define SERVO_MAX 	150
 #define SERVO_MIN	  60
-#endif // SERVO_180
-
-#endif // SERVO_270
-
-RTC_TimeTypeDef RTC_TimeStruct;
+#endif // SERVO 180°
 
 // value of pressure sensor
 int pressure = 6;
@@ -224,11 +249,12 @@ void console_debug(const char *function, const char *format_str, ...) {
 }
 
 //Globsl Object initialization
-OneButton btnA(G39, true);
-OneButton btnB(G37, true);
+OneButton btnA(BUTTONA_PIN, true);
+OneButton btnB(BUTTONB_PIN, true);
 Servo servo;
 DeltaTime interval;
 
+#ifdef M5STICKC
 void updateCalibration(int value)
 {
   EEPROM.write(0, value);  // save in EEPROM
@@ -236,7 +262,6 @@ void updateCalibration(int value)
   // clear old line
   M5.Lcd.drawLine(1, Y_OFFSET(setpoint), 4, Y_OFFSET(setpoint), BLACK);
   M5.Lcd.drawLine(26, Y_OFFSET(setpoint), 29, Y_OFFSET(setpoint), BLACK);
-
   // set new line
   setpoint = value; //set global
   M5.Lcd.drawLine(1, Y_OFFSET(setpoint), 4, Y_OFFSET(setpoint), 0x7bef);
@@ -341,11 +366,6 @@ void btnAClick()
   updateCalibration(pressure);
 }
 
-//float getPercentError(float approx, float exact)
-//{
-//  return (abs(approx-exact)/exact)*100;
-//}
-
 void setLED(bool isON)
 {
   digitalWrite (LED_PIN, !isON); // set the LED
@@ -407,6 +427,7 @@ void progressBar(int p, bool ledon)
     M5.Lcd.fillRect(8, 142-i, 15, 1, (i <= value) ? rainbow(i) : BLACK);
   }
 }
+#endif // M5STICKC
 
 int getPressure() {
     // logic
@@ -424,7 +445,19 @@ void updateServoProgressive(int pressure) {
       servo_angle = map(pressure, 0, PRESSURE_MAX, SERVO_MIN, SERVO_MAX);
   }
 
-  servo.write(servo_angle);  
+  servo.write(servo_angle);
+
+#ifdef DEBUG
+  Serial.println(pressure);
+
+  // print count when there is a low/high transition (pressure above threshold)
+  if (state==HIGH && lastState==LOW){
+      count++;
+      delay (10);
+      Serial.println(count);
+  }
+  lastState=state;
+#endif
 }
 
 // state update function
@@ -502,14 +535,16 @@ void updateState(int pressure) {
 }
 
 void setup() {
-  M5.begin();
-  EEPROM.begin(EEPROM_SIZE);  //Initialize EEPROM
-  Serial.begin(115200);       //Initialize Serial
-  pinMode(LED_PIN, OUTPUT);    //Set up LED
-  digitalWrite (LED_PIN, HIGH); // turn off the LED
-
+  //Initialize Serial
+  Serial.begin(115200);       
   // Inizializzazione servo 
   servo.attach(SERVO_PIN);
+
+#ifdef M5STICKC
+  M5.begin();
+  EEPROM.begin(EEPROM_SIZE);  //Initialize EEPROM
+  pinMode(LED_PIN, OUTPUT);    //Set up LED
+  digitalWrite (LED_PIN, HIGH); // turn off the LED
 
   M5.Lcd.setRotation(0);
   M5.Lcd.fillScreen(TFT_BLACK);
@@ -527,36 +562,28 @@ void setup() {
   RTC_TimeStruct.Minutes = 0;
   RTC_TimeStruct.Seconds = 0;
   M5.Rtc.SetTime(&RTC_TimeStruct); 
+#endif // M5STICKC
 }
 
 void loop () {
-
+#ifdef M5STICKC
   updateUI();
   
   //poll for button press
   btnA.tick();
   btnB.tick();
+#endif
 
   pressure = getPressure();
   _DEBUG("Detected Pressure[%d]",pressure);
 
   // update progress bar and led state
+#ifdef M5STICKC
   progressBar(pressure, pressure > setpoint);  
+#endif
 
   if (mode == MODE_PROGRESSIVE)
       updateServoProgressive(pressure);
   else
       updateState(pressure);
-
-#ifdef DEBUG
-  Serial.println(pressure);
-
-  // print count when there is a low/high transition (pressure above threshold)
-  if (state==HIGH && lastState==LOW){
-      count++;
-      delay (10);
-      Serial.println(count);
-  }
-  lastState=state;
-#endif
 }  
