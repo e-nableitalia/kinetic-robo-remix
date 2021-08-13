@@ -23,6 +23,8 @@
 
 // global defines
 #define DEBUG
+// uncomment to enable pressure sensor simulation
+// #define SIMULATED
 
 #ifdef ESP32
 #include <M5StickC.h>
@@ -58,7 +60,11 @@ RTC_TimeTypeDef RTC_TimeStruct;
 #define SERVO_MAXANGLE    270
 #define MODE_PROGRESSIVE  1   // firmware mode = hold
 #define MODE_HOLDTIME     2   // 
-#define LOOP_DELAY        50  // delay main loop of 10 mS, to keep higher pressure sample rate and delay hand opening it is also possible to use a servo increment prescaler (feature to be evaluated)
+#ifdef SIMULATED
+#define LOOP_DELAY        100  // delay main loop of 100 mS in simulation
+#else
+#define LOOP_DELAY        50  // delay main loop of 50 mS, to keep higher pressure sample rate and delay hand opening it is also possible to use a servo increment prescaler (feature to be evaluated)
+#endif
 #define EEPROM_SIZE       1
 #define INTERVAL_OPEN     0   // hand open interval id, used to calculate hold time since first muscle contraction -> activate hand/servo closure
 #define INTERVAL_CLOSE    1   // hand close interval id, used to calculate hold time since first muscle contraction -> trigger hand open operation
@@ -73,12 +79,37 @@ RTC_TimeTypeDef RTC_TimeStruct;
 //#define Y_OFFSET(x) (15+(127-x))
 #define Y_OFFSET(x) (15+(254-x))
 
-
-
 #ifdef DEBUG
 #define _DEBUG(...)   console_debug(__func__, __VA_ARGS__)
 #else
 #degine _DEBUG(...)
+#endif
+
+#ifdef SIMULATED
+struct SimulatedPressure {
+  int value;    // PRESSURE VALUE
+  int count;    // LOOP COUNTS
+};
+
+SimulatedPressure _simEvents[] = {
+  { 0, 50 }, // pressure 0, duration 50*50ms -> 2.5s
+  { 100, 2 }, // pressure 100, duration 150ms
+  { 0, 50 }, // pressure 0, delay 50*50ms -> 2.5s
+  { 200, 3 }, // pressure 200, duration 150ms
+  { 300, 5 }, // pressure 300, duration 250ms -> should trigger handle close
+  { 500, 100 }, // pressure 500, duration 5s -> continue closing
+  { 300, 5 }, // pressure 300, duration 250ms -> continue closing
+  { 200, 3 }, // pressure 200, duration 150ms
+  { 0, 50 }, // pressure 0, delay 50*50ms -> 2.5s
+  { 500, 10 }, // pressure 500, duration 500ms -> start opening
+  { 0, 200 }, // pressure 0, delay 10s
+};
+
+int _simIndex = -1;
+int _simPressure = 0;
+int _simCount = 0;
+
+#define MAX_SIMULATED_EVENTS 11
 #endif
 
 // for servo 270 degrees maximum lever 6-7mm
@@ -103,7 +134,9 @@ enum _hand_state {
   OPENING,
   HOLD_CLOSING,
   CLOSING,
-  IDLE_CLOSED
+  IDLE_CLOSED,
+  CLOSED,
+  OPEN
 } hand_state = IDLE_OPEN;
 
 char *_state[] = {
@@ -113,6 +146,8 @@ char *_state[] = {
   "HOLD_CLOSING",
   "CLOSING",
   "IDLE_CLOSED",
+  "CLOSED",
+  "OPEN",
   0
 };
 
@@ -157,6 +192,26 @@ public:
     }
 
     uint32_t delta(int i) {
+#if defined (STM32F2XX) // Photon   
+        uint32_t current_ticks = System.ticks();
+#else
+        uint32_t current_ticks = micros();
+#endif
+        if (last_ticks[i] != 0) {
+            uint32_t _d = (current_ticks - last_ticks[i])/ticks_per_micro;
+            //last_ticks[i] = current_ticks;
+            if (current_ticks < last_ticks[i]) // normalize
+              return (UINT32_MAX - _d);
+            else
+              return _d;
+        } 
+        //else
+        //    last_ticks[i] = current_ticks;
+
+        return 0;
+    }
+
+    uint32_t deltaandrestart(int i) {
 #if defined (STM32F2XX) // Photon   
         uint32_t current_ticks = System.ticks();
 #else
@@ -431,8 +486,20 @@ void progressBar(int p, bool ledon)
 #endif // M5STICKC
 
 int getPressure() {
-    // logic
+  // logic
+#ifdef SIMULATED
+  if (_simCount == 0) {
+    _simIndex = (_simIndex+1) %  MAX_SIMULATED_EVENTS;
+    _DEBUG("New simIndex[%d]", _simIndex);
+    _simCount = _simEvents[_simIndex].count;
+  } else
+    _simCount--;
+
+  int raw_pressure = _simEvents[_simIndex].value;
+  _DEBUG("Simulated Pressure, index[%d], value[%d], count[%d]",_simIndex,raw_pressure,_simCount);
+#else
   int raw_pressure = analogRead(SENSOR_PIN);
+#endif
 
   // normalized pressure
   return (raw_pressure < PRESSURE_MAX) ? raw_pressure : PRESSURE_MAX;
@@ -469,10 +536,11 @@ void updateState(int pressure) {
   switch (hand_state) {
       case HOLD_OPENING:
           if (pressure > PRESSURE_MIN) {
-              _DEBUG("Pressure[%d] > PRESSURE_MIN[%d], check hold interval expired",pressure, PRESSURE_MIN);
-              if (interval.delta(INTERVAL_OPEN) > HOLDTIME_INTERVAL_uS) {
-                  _DEBUG("OPEN hold interval expired, start opening hand");
-                  hand_state = OPENING;
+              int delta = interval.delta(INTERVAL_OPEN);
+              _DEBUG("Pressure[%d] > PRESSURE_MIN[%d], check hold interval[%d] expired[%d]",pressure, PRESSURE_MIN, delta, INTERVAL_OPEN);
+              if (delta > HOLDTIME_INTERVAL_uS) {
+                  _DEBUG("OPEN hold interval expired, start closing hand");
+                  hand_state = CLOSING;
               }
           } else {
               // discard small muscle contraction and return idle
@@ -480,19 +548,27 @@ void updateState(int pressure) {
               hand_state = IDLE_OPEN;
           }
           break;
-      case OPENING:
+      case CLOSING:
           if (pressure > PRESSURE_MIN) {
-              _DEBUG("Pressure[%d] > PRESSURE_MIN[%d], check can continue to open hand",pressure, PRESSURE_MIN);
+              _DEBUG("Pressure[%d] > PRESSURE_MIN[%d], check can continue to close hand",pressure, PRESSURE_MIN);
               if (servo_angle < SERVO_MAX) {
-                  servo_angle++;
-                  _DEBUG("Current servo andle[%d]",servo_angle);
+                  int magnitude = (pressure / 50) + 1;
+                  servo_angle = servo_angle + magnitude;
+                  _DEBUG("Current servo angle[%d], magnitude[%d]",servo_angle, magnitude);
                   servo.write(servo_angle);
               } else {
-                  _DEBUG("Current servo angle[%d], hand completely open",servo_angle);
-                  hand_state = IDLE_CLOSED;
+                  _DEBUG("Current servo angle[%d], hand completely closed",servo_angle);
+                  hand_state = CLOSED;
               }
           } else {
               _DEBUG("Pressure[%d] < PRESSURE_MIN[%d], stop closing hand",pressure, PRESSURE_MIN);
+              hand_state = CLOSED;
+          }
+          break;
+       case CLOSED:
+          _DEBUG("Check Pressure[%d] < PRESSURE_MIN[%d] to go in IDLE_CLOSE",pressure, PRESSURE_MIN);
+          if (pressure < PRESSURE_MIN) {
+              _DEBUG("Going in IDLE_CLOSED state");
               hand_state = IDLE_CLOSED;
           }
           break;
@@ -501,7 +577,7 @@ void updateState(int pressure) {
               _DEBUG("Pressure[%d] > PRESSURE_MIN[%d], check can close hand",pressure, PRESSURE_MIN);
               if (interval.delta(INTERVAL_CLOSE) > HOLDTIME_INTERVAL_uS) {
                   _DEBUG("CLOSE hold interval expired, closing hand");
-                  hand_state = CLOSING;
+                  hand_state = OPENING;
               }
           } else {
               // discard small muscle contraction and return idle
@@ -509,10 +585,18 @@ void updateState(int pressure) {
               hand_state = IDLE_CLOSED;
           }
           break;
-      case CLOSING:
-          _DEBUG("Closing hand, servo handle -> [%d]",SERVO_MIN);
+      case OPENING:
+          _DEBUG("Opening hand, servo hangle -> [%d]",SERVO_MIN);
           servo.write(SERVO_MIN);
-          hand_state = IDLE_OPEN;
+          servo_angle = SERVO_MIN;
+          hand_state = OPEN;
+          break;
+      case OPEN:
+           _DEBUG("Check Pressure[%d] < PRESSURE_MIN[%d] to go in IDLE_OPEN",pressure, PRESSURE_MIN);
+          if (pressure < PRESSURE_MIN) {
+              _DEBUG("Going in IDLE_OPEN state");
+              hand_state = IDLE_OPEN;
+          }
           break;
       case IDLE_CLOSED:
           if (pressure > PRESSURE_MIN) {
@@ -564,6 +648,10 @@ void setup() {
   RTC_TimeStruct.Seconds = 0;
   M5.Rtc.SetTime(&RTC_TimeStruct); 
 #endif // M5STICKC
+#ifdef SIMULATED
+  _DEBUG("Init: sleep 5 seconds");
+  delay(5000);
+#endif
 }
 
 void loop () {
