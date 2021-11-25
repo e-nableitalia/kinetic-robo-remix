@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <Servo.h>
 #include <OneButton.h>
+#include <EMG_Hal.h>
 
 // global defines
 #define DEBUG
@@ -149,6 +150,52 @@ char *_state[] = {
   "CLOSED",
   "OPEN",
   0
+};
+
+class HandState {
+public:
+  virtual char *getName() = 0;
+  virtual HandState *update(int pressure) = 0;
+protected:
+  virtual HandState *enter() {
+      return this;
+  }
+};
+
+class HandStateIdleOpen : public HandState {
+  virtual char *getName() { return "IDLE_OPEN"; }
+  virtual HandState *update(int pressure) {
+      if (pressure > PRESSURE_MIN) {
+          _DEBUG("Pressure[%d] > PRESSURE_MIN[%d], start hold open timer",pressure, PRESSURE_MIN);
+          return HandStateHoldOpening::enter();
+        } else
+          return this;
+  }
+};
+
+class HandStateHoldOpening : public HandState {
+  char *getName() { return "HOLD_OPENING"; }
+  virtual HandState *update(int pressure) {
+     if (pressure > PRESSURE_MIN) {
+          int delta = m_interval.delta(INTERVAL_OPEN);
+          _DEBUG("Pressure[%d] > PRESSURE_MIN[%d], check hold interval[%d] expired[%d]",pressure, PRESSURE_MIN, delta, INTERVAL_OPEN);
+          if (delta > HOLDTIME_INTERVAL_uS) {
+              _DEBUG("OPEN hold interval expired, start closing hand");
+              return HandStateClosing::enter();
+              //hand_state = CLOSING;
+          }
+      } else {
+          // discard small muscle contraction and return idle
+          _DEBUG("Muscle contraction discarded, inteval too small");
+          return HandStateIdleOpen::enter();
+      }
+  }
+  virtual HandState *enterState() {
+      m_interval.start(INTERVAL_OPEN);
+      return this;
+  }
+  private:
+  DeltaTime m_interval;
 };
 
 // current servo angle
