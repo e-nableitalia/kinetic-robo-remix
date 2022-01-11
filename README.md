@@ -1,8 +1,9 @@
 # kinetic-robo-remix
 
 ## description
-This project is a new firmware (derivative of Kinetic Robot Remix by Michele Praga) to drive a servo controlled Kinetic Hand with a pressure sensor. 
+This project is a new firmware to drive a servo controlled Kinetic Hand with a pressure sensor.
 
+this firmware is a derivative of firmware released by Michele Praga with the "Remix kinetic hand" project.
 
 ## Thingiverse projects
 Remix kinetic hand by Michele Praga -> https://www.thingiverse.com/thing:4750846
