@@ -6,7 +6,9 @@ This project is a new firmware (derivative of Kinetic Robot Remix by Michele Pra
 
 ## Thingiverse projects
 Remix kinetic hand by Michele Praga -> https://www.thingiverse.com/thing:4750846
+
 Bionic Hand Muscle Sensor by Michele Praga -> https://www.thingiverse.com/thing:4745915
+
 Kinetic Hand by Matt Bowdell -> https://www.thingiverse.com/thing:4618922
 
 ## main features
