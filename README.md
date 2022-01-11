@@ -24,6 +24,7 @@ ESP32 M5StickC
 
 ## License
 This software is released under *Creative Commons - Attribution - Non-Commercial - Share Alike license*
+
 Kinetic Hand by Matt Bowtell and derivative projects are released under *Creative Commons - Attribution - Non-Commercial - Share Alike license*
 
 ## LIMITATION OF LIABILITY.
