@@ -10,3 +10,6 @@
 /SAADC_demo.c
 scuba/scuba.ino
 scuba.ino/scuba.ino.ino
+Samples/ArduinoNano_SAADC_demo.c
+Samples/ble_sdk_uart_over_ble_main.c
+Samples/main.c
