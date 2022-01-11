@@ -1,0 +1,5 @@
+{
+    "board": "arduino:mbed_nano:nano33ble",
+    "sketch": "kinetic_m5stick\\kinetic_m5stick.ino",
+    "output": "../ArduinoOutput"
+}

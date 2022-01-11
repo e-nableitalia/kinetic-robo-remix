@@ -1,0 +1,11 @@
+{
+    "arduino.commandPath": "",
+    "files.associations": {
+        "ratio": "cpp",
+        "system_error": "cpp",
+        "tuple": "cpp",
+        "functional": "cpp",
+        "type_traits": "cpp",
+        "utility": "cpp"
+    }
+}

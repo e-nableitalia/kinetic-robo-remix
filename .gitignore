@@ -4,7 +4,8 @@
 /SCRUFE.c/SCRUFE.c.ino
 /ArduinoNanoSAADC.c
 /Bionic/Bionic.ino
-/ble_sdk_uart§_over_ble_main.c
+/ble_sdk_uart_over_ble_main.c
+/ArduinoNano_SAADC_demo.c
 /main.c
 /SAADC_demo.c
 scuba/scuba.ino
