@@ -23,6 +23,9 @@ Arduino nano 33 ble
 
 ESP32 M5StickC
 
+## Authors
+Alberto Navatta - alberto.navatta@gmail.com / alberto@e-nableitalia.it
+
 ## License
 This software is released under *Creative Commons - Attribution - Non-Commercial - Share Alike license*
 
