@@ -2,56 +2,57 @@
     "version": 4,
     "configurations": [
         {
-            "name": "Win32",
-            "compilerPath": "C:\\Perl64\\c\\bin\\gcc.exe",
-            "compilerArgs": [],
-            "intelliSenseMode": "windows-gcc-x86",
-            "includePath": [
-                "${workspaceFolder}/**"
-            ],
-            "forcedInclude": [],
-            "cStandard": "c89",
-            "cppStandard": "c++11",
-            "defines": [
-                "_DEBUG",
-                "UNICODE",
-                "_UNICODE"
-            ]
-        },
-        {
             "name": "Arduino",
-            "compilerPath": "C:\\Users\\anavatta.IMN\\AppData\\Local\\Arduino15\\packages\\arduino\\tools\\arm-none-eabi-gcc\\7-2017q4\\bin\\arm-none-eabi-g++",
+            "compilerPath": "C:\\Users\\kabir\\AppData\\Local\\Arduino15\\packages\\arduino\\tools\\arm-none-eabi-gcc\\7-2017q4\\bin\\arm-none-eabi-g++",
             "compilerArgs": [
-                "-w",
+                "-mcpu=cortex-m0plus",
+                "-mthumb",
+                "-Wall",
+                "-Wextra",
                 "-std=gnu++11",
-                "-nostdlib"
+                "-ffunction-sections",
+                "-fdata-sections",
+                "-fno-threadsafe-statics",
+                "-nostdlib",
+                "--param",
+                "-fno-rtti",
+                "-fno-exceptions"
             ],
             "intelliSenseMode": "gcc-x64",
             "includePath": [
-                "C:\\Users\\anavatta.IMN\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_nano\\2.6.1\\cores\\arduino",
-                "C:\\Users\\anavatta.IMN\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_nano\\2.6.1\\variants\\ARDUINO_NANO33BLE",
-                "C:\\Program Files (x86)\\Arduino\\libraries\\Servo\\src",
-                "C:\\Users\\anavatta.IMN\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_nano\\2.6.1\\cores\\arduino\\api\\deprecated",
-                "C:\\Users\\anavatta.IMN\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_nano\\2.6.1\\cores\\arduino\\api\\deprecated-avr-comp",
-                "c:\\users\\anavatta.imn\\appdata\\local\\arduino15\\packages\\arduino\\tools\\arm-none-eabi-gcc\\7-2017q4\\arm-none-eabi\\include\\c++\\7.2.1",
-                "c:\\users\\anavatta.imn\\appdata\\local\\arduino15\\packages\\arduino\\tools\\arm-none-eabi-gcc\\7-2017q4\\arm-none-eabi\\include\\c++\\7.2.1\\arm-none-eabi",
-                "c:\\users\\anavatta.imn\\appdata\\local\\arduino15\\packages\\arduino\\tools\\arm-none-eabi-gcc\\7-2017q4\\arm-none-eabi\\include\\c++\\7.2.1\\backward",
-                "c:\\users\\anavatta.imn\\appdata\\local\\arduino15\\packages\\arduino\\tools\\arm-none-eabi-gcc\\7-2017q4\\lib\\gcc\\arm-none-eabi\\7.2.1\\include",
-                "c:\\users\\anavatta.imn\\appdata\\local\\arduino15\\packages\\arduino\\tools\\arm-none-eabi-gcc\\7-2017q4\\lib\\gcc\\arm-none-eabi\\7.2.1\\include-fixed",
-                "c:\\users\\anavatta.imn\\appdata\\local\\arduino15\\packages\\arduino\\tools\\arm-none-eabi-gcc\\7-2017q4\\arm-none-eabi\\include"
+                "C:\\Users\\kabir\\AppData\\Local\\Arduino15\\packages\\arduino\\tools\\CMSIS\\4.5.0\\CMSIS\\Include\\",
+                "C:\\Users\\kabir\\AppData\\Local\\Arduino15\\packages\\arduino\\tools\\CMSIS-Atmel\\1.2.0\\CMSIS\\Device\\ATMEL\\",
+                "C:\\Users\\kabir\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\samd\\1.8.12\\cores\\arduino\\api\\deprecated",
+                "C:\\Users\\kabir\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\samd\\1.8.12\\cores\\arduino\\api\\deprecated-avr-comp",
+                "C:\\Users\\kabir\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\samd\\1.8.12\\cores\\arduino",
+                "C:\\Users\\kabir\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\samd\\1.8.12\\variants\\nano_33_iot",
+                "C:\\Program Files\\Arduino\\libraries\\Servo\\src",
+                "C:\\Users\\kabir\\OneDrive\\Documenti\\Arduino\\libraries\\ArduinoBLE\\src",
+                "C:\\Program Files\\Arduino\\libraries\\EMGFilters",
+                "c:\\users\\kabir\\appdata\\local\\arduino15\\packages\\arduino\\tools\\arm-none-eabi-gcc\\7-2017q4\\arm-none-eabi\\include\\c++\\7.2.1",
+                "c:\\users\\kabir\\appdata\\local\\arduino15\\packages\\arduino\\tools\\arm-none-eabi-gcc\\7-2017q4\\arm-none-eabi\\include\\c++\\7.2.1\\arm-none-eabi",
+                "c:\\users\\kabir\\appdata\\local\\arduino15\\packages\\arduino\\tools\\arm-none-eabi-gcc\\7-2017q4\\arm-none-eabi\\include\\c++\\7.2.1\\backward",
+                "c:\\users\\kabir\\appdata\\local\\arduino15\\packages\\arduino\\tools\\arm-none-eabi-gcc\\7-2017q4\\lib\\gcc\\arm-none-eabi\\7.2.1\\include",
+                "c:\\users\\kabir\\appdata\\local\\arduino15\\packages\\arduino\\tools\\arm-none-eabi-gcc\\7-2017q4\\lib\\gcc\\arm-none-eabi\\7.2.1\\include-fixed",
+                "c:\\users\\kabir\\appdata\\local\\arduino15\\packages\\arduino\\tools\\arm-none-eabi-gcc\\7-2017q4\\arm-none-eabi\\include"
             ],
             "forcedInclude": [
-                "C:\\Users\\anavatta.IMN\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_nano\\2.6.1\\cores\\arduino\\Arduino.h"
+                "C:\\Users\\kabir\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\samd\\1.8.12\\cores\\arduino\\Arduino.h"
             ],
             "cStandard": "c11",
             "cppStandard": "c++11",
             "defines": [
-                "ARDUINO_ARCH_NRF52840",
+                "F_CPU=48000000L",
                 "ARDUINO=10819",
-                "ARDUINO_ARDUINO_NANO33BLE",
-                "ARDUINO_ARCH_MBED_NANO",
-                "ARDUINO_ARCH_MBED",
-                "ARDUINO_LIBRARY_DISCOVERY_PHASE=0",
+                "ARDUINO_SAMD_NANO_33_IOT",
+                "ARDUINO_ARCH_SAMD",
+                "CRYSTALLESS",
+                "__SAMD21G18A__",
+                "USB_VID=0x2341",
+                "USB_PID=0x8057",
+                "USBCON",
+                "USB_MANUFACTURER=\"Arduino LLC\"",
+                "USB_PRODUCT=\"Arduino NANO 33 IoT\"",
                 "__DBL_MIN_EXP__=(-1021)",
                 "__HQ_FBIT__=15",
                 "__FLT32X_MAX_EXP__=1024",

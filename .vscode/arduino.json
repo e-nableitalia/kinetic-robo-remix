@@ -1,5 +1,6 @@
 {
-    "board": "arduino:mbed_nano:nano33ble",
+    "board": "arduino:samd:nano_33_iot",
+    "port": "COM3",
     "sketch": "kinetic_m5stick\\kinetic_m5stick.ino",
     "output": "../ArduinoOutput"
 }

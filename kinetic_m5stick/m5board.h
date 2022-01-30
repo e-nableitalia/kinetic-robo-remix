@@ -13,7 +13,7 @@
 #include <RTC.h>
 
 #include <EEPROM.h>
-
+#include "nano33bleboard.h"
 // PINS
 #define SERVO_PIN   G26
 #define LED_PIN     G10

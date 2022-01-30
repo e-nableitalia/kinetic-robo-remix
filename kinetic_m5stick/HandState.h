@@ -36,7 +36,7 @@ void updateServoProgressive(int pressure);
 
 class HandState {
 public:
-  virtual char *getName() = 0;
+  virtual char const *getName() = 0;
   virtual HandState *update(int pressure) = 0;
   virtual HandState *enter() {
       return this;
@@ -48,7 +48,7 @@ protected:
 class HandStateHoldOpening : public HandState {
   public:
     static HandState& instance();
-    char *getName() { return "HOLD_OPENING"; }
+    char const *getName() { return (char*)"HOLD_OPENING" ; }
     virtual HandState *update(int pressure);
     virtual HandState *enter();
 };
@@ -56,14 +56,14 @@ class HandStateHoldOpening : public HandState {
 class HandStateIdleOpen : public HandState {
   public:
     static HandState& instance();
-    char *getName() { return "IDLE_OPEN"; }
+    char const *getName() {   ; return  (char*)"IDLE_OPEN"; }
     virtual HandState *update(int pressure);
 };
 
 class HandStateOpening : public HandState {
   public:
     static HandState& instance();
-    char *getName() { return "OPENING"; }
+    char const *getName()   { return (char*)"OPENING";}
     virtual HandState *update(int pressure);
     virtual HandState *enter();
 };
@@ -71,7 +71,7 @@ class HandStateOpening : public HandState {
 class HandStateHoldClosing : public HandState {
   public:
     static HandState& instance();
-    char *getName() { return "HOLD_CLOSING"; }
+    char const *getName() { return  (char*)"HOLD_CLOSING"; }
     virtual HandState *update(int pressure);
     virtual HandState *enter();
 };
@@ -79,7 +79,7 @@ class HandStateHoldClosing : public HandState {
 class HandStateClosing : public HandState {
   public:
     static HandState& instance();
-    char *getName() { return "CLOSING"; }
+    char const *getName() { return (char*)"CLOSING";  }
     virtual HandState *update(int pressure);
     virtual HandState *enter();
 };
@@ -87,7 +87,7 @@ class HandStateClosing : public HandState {
 class HandStateIdleClosed : public HandState {
   public:
     static HandState& instance();
-    char *getName() { return "IDLE_CLOSED"; }
+    char const *getName() { return (char*)"IDLE_CLOSED";   }
     virtual HandState *update(int pressure);
     virtual HandState *enter();
 };
@@ -95,14 +95,14 @@ class HandStateIdleClosed : public HandState {
 class HandStateClosed : public HandState {
   public:
     static HandState& instance();
-    char *getName() { return "CLOSED"; }
+    char  const *getName() { return    (char*)"CLOSE"; }
     virtual HandState *update(int pressure);
 };
 
 class HandStateOpen : public HandState {
   public:
     static HandState& instance();
-    char *getName() { return "OPEN"; }
+    char const *getName() {return (char*)"OPEN";  }
     virtual HandState *update(int pressure);
     virtual HandState *enter();
 };

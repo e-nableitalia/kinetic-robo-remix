@@ -19,20 +19,22 @@
 
 #include <stdarg.h>
 #include <stdio.h>
+#include "nano33bleboard.h"
 #include <Servo.h>
-
+#include <ArduinoBLE.h>
 #include "DeltaTime.h"
 
 #include "global_config.h"
-
+#include "EMGFilters.h"
 #include "HandState.h"
 #include "console_debug.h"
+
 
 //#include <EMG_Hal.h>
 
 // global defines
 // uncomment to enable pressure sensor simulation
-// #define SIMULATED
+//#define SIMULATED
 
 #ifdef SIMULATED
 #define LOOP_DELAY        100  // delay main loop of 100 mS in simulation
@@ -72,6 +74,21 @@ int setpoint = 240;
 
 // value of pressure sensor
 int pressure = 6;
+unsigned long threshold = 0;  // threshold: Relaxed baseline values.(threshold=0:in the calibration process)
+unsigned long EMG_num = 0;      // EMG_num: The number of statistical signals
+
+EMGFilters myFilter;
+////////////////////////BLE SETTINGS//
+
+const int ledPin = LED_BUILTIN; // set ledPin to on-board LED
+const int buttonPin = 4; // set buttonPin to digital pin 4
+
+BLEService ledService("Read Movement"); // create service
+
+// create switch characteristic and allow remote device to read and write
+BLEByteCharacteristic ledCharacteristic("Show Output", BLERead | BLEWrite);
+// create button characteristic and allow remote device to get notifications
+BLEByteCharacteristic buttonCharacteristic("Stuff", BLERead | BLENotify);
 
 
 
@@ -104,7 +121,8 @@ int getPressure() {
 #endif
 
   // normalized pressure
-  return (raw_pressure < PRESSURE_MAX) ? raw_pressure : PRESSURE_MAX;
+  //return (raw_pressure < PRESSURE_MAX) ? raw_pressure : PRESSURE_MAX;
+  return raw_pressure;
 }
 
 // state update function
@@ -201,11 +219,76 @@ void updateState(int pressure) {
   _DEBUG("Sleeping %d ms",LOOP_DELAY);
   delay(LOOP_DELAY);
 }
+int o = 0 ;
+void setupBLE()
+{
+    
+  while (!Serial);
 
+  pinMode(ledPin, OUTPUT); // use the LED as an output
+  pinMode(buttonPin, INPUT); // use button pin as an input
+
+  // begin initialization
+  if (!BLE.begin()) {
+    Serial.println("starting BLE failed!");
+
+    while (1);
+  }
+
+  // set the local name peripheral advertises
+  BLE.setLocalName("Enable Kinetic");
+  // set the UUID for the service this peripheral advertises:
+  BLE.setAdvertisedService(ledService);
+
+  // add the characteristics to the service
+  ledService.addCharacteristic(ledCharacteristic);
+  ledService.addCharacteristic(buttonCharacteristic);
+
+  // add the service
+  BLE.addService(ledService);
+
+  ledCharacteristic.writeValue(o);
+  buttonCharacteristic.writeValue(0);
+
+  // start advertising
+  BLE.advertise();
+
+  Serial.println("Bluetooth device active, waiting for connections...");
+}
+void blePoll(int val)
+{
+  
+  BLE.poll();
+
+  // read the current button pin state
+  char buttonValue = digitalRead(buttonPin);
+
+  // has the value changed since the last read
+  boolean buttonChanged = (buttonCharacteristic.value() != buttonValue);
+
+  if (buttonChanged) {
+
+  }
+
+  if (ledCharacteristic.written() || buttonChanged) {
+    // update LED, either central has written to characteristic or button state has changed
+    if (ledCharacteristic.value()) {
+      
+      
+    } else {
+      
+
+    }
+  }
+  Serial.println(o);
+  ledCharacteristic.writeValue(val);
+    buttonCharacteristic.writeValue(val);
+}
 void setup() {
   //Initialize Serial
   Serial.begin(115200);       
   handInit();
+  setupBLE();
 
 #ifdef ARDUINO_M5Stick_C
   M5init();
@@ -216,21 +299,100 @@ void setup() {
 #endif
 }
 
+
+
+int getEMGCount(int gforce_envelope)
+{
+  static long integralData = 0;
+  static long integralDataEve = 0;
+  static bool remainFlag = false;
+  static unsigned long timeMillis = 0;
+  static unsigned long timeBeginzero = 0;
+  static long fistNum = 0;
+  static int  TimeStandard = 200;
+  /*
+    The integral is processed to continuously add the signal value
+    and compare the integral value of the previous sampling to determine whether the signal is continuous
+   */
+  integralDataEve = integralData;
+  integralData += gforce_envelope;
+  /*
+    If the integral is constant, and it doesn't equal 0, then the time is recorded;
+    If the value of the integral starts to change again, the remainflag is true, and the time record will be re-entered next time
+  */
+  if ((integralDataEve == integralData) && (integralDataEve != 0))
+  {
+    timeMillis = millis();
+    if (remainFlag)
+    {
+      timeBeginzero = timeMillis;
+      remainFlag = false;
+      return 0;
+    }
+    /* If the integral value exceeds 200 ms, the integral value is clear 0,return that get EMG signal */
+    if ((timeMillis - timeBeginzero) > TimeStandard)
+    {
+      integralDataEve = integralData = 0;
+      return 1;
+    }
+    return 0;
+  }
+  else {
+    remainFlag = true;
+    return 0;
+   }
+}
+int emgfilterNano()
+{
+  int data = analogRead(SENSOR_PIN);
+  int dataAfterFilter = myFilter.update(data);  // filter processing
+  int envelope = sq(dataAfterFilter);   //Get envelope by squaring the input
+  envelope = (envelope > threshold) ? envelope : 0;    // The data set below the base value is set to 0, indicating that it is in a relaxed state
+
+  /* if threshold=0,explain the status it is in the calibration process,the code bollow not run.
+     if get EMG singal,number++ and print
+  */
+  if (threshold > 0)
+  {
+    if (getEMGCount(envelope))
+    {
+      EMG_num++;
+      
+      Serial.println(EMG_num);
+    }
+  }
+  else {
+    
+    if ( envelope > 250000)
+    {
+    Serial.println(envelope);
+    }
+    
+  }
+  delayMicroseconds(1000);
+      Serial.println(envelope/10000);
+  return envelope/10000;
+}
 void loop () {
+  
 #ifdef ARDUINO_M5Stick_C
   M5loop();
 #endif // ARDUINO_M5Stick_C
 
-  pressure = getPressure();
-  _DEBUG("Detected Pressure[%d]",pressure);
+
+  //pressure = getPressure();
+  
+  blePoll(emgfilterNano());
+  
+  //_DEBUG("Detected Pressure[%d]",pressure);
 
   // update progress bar and led state
 #ifdef ARDUINO_M5Stick_C
   progressBar(pressure, pressure > setpoint);  
 #endif // ARDUINO_M5Stick_C
 
-  if (mode == MODE_PROGRESSIVE)
+ /* if (mode == MODE_PROGRESSIVE)
       updateServoProgressive(pressure);
   else
-      updateState(pressure);
+      updateState(pressure);*/
 }  

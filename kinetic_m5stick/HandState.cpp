@@ -1,7 +1,7 @@
 #include <Servo.h>
 
 #include "HandState.h"
-
+#include "nano33bleboard.h"
 // current servo angle
 int servo_angle = 0;
 int state = LOW;
@@ -17,6 +17,8 @@ void handInit()
 {
   // Inizializzazione servo 
   servo.attach(SERVO_PIN);
+     
+    
 }
 
 void updateServoProgressive(int pressure)
