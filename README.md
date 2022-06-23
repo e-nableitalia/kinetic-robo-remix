@@ -1,9 +1,9 @@
 # kinetic-robo-remix
 
-## description
+## Description
 This project is a new firmware to drive a servo controlled Kinetic Hand with a pressure sensor.
 
-this firmware is a derivative of firmware released by Michele Praga with the "Remix kinetic hand" project.
+This firmware is a derivative of firmware released by Michele Praga with the "Remix kinetic hand" project.
 
 ## Thingiverse projects
 Remix kinetic hand by Michele Praga -> https://www.thingiverse.com/thing:4750846
@@ -24,8 +24,9 @@ Arduino nano 33 ble
 ESP32 M5StickC
 
 ## Authors
-Michele Praga - TBA
-Alberto Navatta - alberto.navatta@gmail.com / alberto@e-nableitalia.it
+Michele Praga - pragamichele@gmail.com
+
+Alberto Navatta - alberto@e-nableitalia.it /  alberto.navatta@gmail.com
 
 ## License
 This software is released under *Creative Commons - Attribution - Non-Commercial - Share Alike license*
