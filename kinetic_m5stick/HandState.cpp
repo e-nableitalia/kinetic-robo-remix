@@ -21,7 +21,7 @@ void handInit()
 
 void updateServoProgressive(int pressure)
  {
-  
+
   if (pressure > setpoint) {
       servo_angle = map(setpoint, 0, PRESSURE_MAX, SERVO_MIN, SERVO_MAX);  //limite impostabile
   } else {
@@ -31,7 +31,7 @@ void updateServoProgressive(int pressure)
   servo.write(servo_angle);
 
 #ifdef DEBUG
-  Serial.println(pressure);
+  _DEBUG("Pressure[%d], servo ange[%d]", pressure, servo_angle);
 
   // print count when there is a low/high transition (pressure above threshold)
   if (state==HIGH && lastState==LOW){
@@ -42,6 +42,11 @@ void updateServoProgressive(int pressure)
   lastState=state;
 #endif
 }
+
+HandState *HandState::enter() {
+    return this;
+}
+
 
 HandState& HandStateHoldOpening::instance()
 {
@@ -63,8 +68,10 @@ HandState *HandStateHoldOpening::update(int pressure) {
             _DEBUG("OPEN hold interval expired, start closing hand");
             return HandStateClosing::instance().enter();
             //hand_state = CLOSING;
-        }
-    } else {
+        } else
+            return this;
+    } 
+    else {
         // discard small muscle contraction and return idle
         _DEBUG("Muscle contraction discarded, inteval too small");
         return HandStateIdleOpen::instance().enter();
@@ -77,6 +84,10 @@ HandState& HandStateIdleOpen::instance()
     // Instantiated on first use.
     return instance;
 }
+
+// HandState *HandStateIdleOpen::enter() {
+//     return this;
+// }
 
 HandState *HandStateIdleOpen::update(int pressure) {
     if (pressure > PRESSURE_MIN) {
@@ -113,7 +124,7 @@ HandState *HandStateClosing::update(int pressure) {
          if (pressure > PRESSURE_MIN) {
               _DEBUG("Pressure[%d] > PRESSURE_MIN[%d], check can continue to close hand",pressure, PRESSURE_MIN);
               if (servo_angle < SERVO_MAX) {
-                  int magnitude = (pressure / 50) + 1;
+                  int magnitude = (pressure / MAGNITUDE) + 1;
                   servo_angle = servo_angle + magnitude;
                   _DEBUG("Current servo angle[%d], magnitude[%d]",servo_angle, magnitude);
                   servo.write(servo_angle);
@@ -161,6 +172,7 @@ HandState& HandStateOpening::instance()
     // Instantiated on first use.
     return instance;
 }
+
 HandState *HandStateOpening::update(int pressure) {
     _DEBUG("Opening hand, servo hangle -> [%d]",SERVO_MIN);
     servo.write(SERVO_MIN);
@@ -174,6 +186,7 @@ HandState& HandStateOpen::instance()
     // Instantiated on first use.
     return instance;
 }
+
 HandState *HandStateOpen::update(int pressure) {
     _DEBUG("Check Pressure[%d] < PRESSURE_MIN[%d] to go in IDLE_OPEN",pressure, PRESSURE_MIN);
     if (pressure < PRESSURE_MIN) {
@@ -189,6 +202,7 @@ HandState& HandStateIdleClosed::instance()
     // Instantiated on first use.
     return instance;
 }
+
 HandState *HandStateIdleClosed::update(int pressure) {
     if (pressure > PRESSURE_MIN) {
         _DEBUG("Pressure[%d] > PRESSURE_MIN[%d], start hold close timer",pressure, PRESSURE_MIN);

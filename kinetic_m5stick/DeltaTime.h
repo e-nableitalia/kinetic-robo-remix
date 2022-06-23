@@ -42,7 +42,7 @@ public:
 #endif
         if (last_ticks[i] != 0) {
             uint32_t _d = (current_ticks - last_ticks[i])/ticks_per_micro;
-            last_ticks[i] = current_ticks;
+            //last_ticks[i] = current_ticks;
 			if (current_ticks < last_ticks[i]) // normalize
 				return (UINT32_MAX - _d);
 			else

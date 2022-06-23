@@ -1,13 +1,12 @@
-/* M5Stickc & Arduino Nsno 33 BLE Muscle control for KINETIC Hand 
- * Rev 1.0, Original project, Praga Michele
- * Rev 1.1, added hold mode and support for Arduino Nano BLE 33, Alberto Navatta
+/* M5Stickc & Arduino Nano 33 BLE Muscle control for KINETIC Hand 
+ * Rev 1.0, Original project, Praga Michele <pragamichele@gmail.com>
+ * Rev 1.1, added hold mode and support for Arduino Nano BLE 33, Alberto Navatta <alberto@e-nableitalia.it>
  *  
  * 
  * 
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
  * IMPLIED.IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR 
  * ANY CLAIM, DAMAGES,OR OTHER LIABILITY. YOU AGREE TO USE AT YOUR OWN RISK.
- * Modified from Praga Michele 
 */
 
 // M5StickC Required libs:
@@ -28,27 +27,42 @@
 #include "HandState.h"
 #include "console_debug.h"
 
-//#include <EMG_Hal.h>
-
 // global defines
+
 // uncomment to enable pressure sensor simulation
 // #define SIMULATED
 
+// enable one of the two operating modes:
+// PROGRESSIVE -> open / close progressively according to pressure sensor value (original code)
+// HOLD TIME -> discard small muscle contractions (duration < 250ms)
+//              trigger closure after pressure is detected for a period > hold time ( > 250ms)
+//              closure lasts till pressure is detected (closure speed is proportional to pressure)
+//              opening is triggered by a pressude detection for a period > hold time ( > 250ms)
+//              opening continues till the hand is completely open
+//
+//#define OPERATING_MODE MODE_PROGRESSIVE
+#define OPERATING_MODE MODE_HOLDTIME
+
 #ifdef SIMULATED
-#define LOOP_DELAY        100  // delay main loop of 100 mS in simulation
+#define LOOP_DELAY        50  // delay main loop of 50 mS in simulation
 #else
-#define LOOP_DELAY        50  // delay main loop of 50 mS, to keep higher pressure sample rate and delay hand opening it is also possible to use a servo increment prescaler (feature to be evaluated)
+#define LOOP_DELAY        10  // delay main loop of 10 mS, to keep higher sample rate for pressure and low delay during hand opening
+                              // TBV, use of a prescaler for servo increment (feature to be evaluated)
+
 #endif
 
 #ifdef SIMULATED
+// simulate sensor pressure with an array of pressure values and loop count
+// once the pressure simulator scans all the _simEvents in the array the 
+// event counter restarts
 struct SimulatedPressure {
-  int value;    // PRESSURE VALUE
-  int count;    // LOOP COUNTS
+  int value;    // PRESSURE VALUE, the pressure value returned in simulated mode
+  int count;    // LOOP COUNTS, number of times the value is returned before to jump to the next one
 };
 
 SimulatedPressure _simEvents[] = {
   { 0, 50 }, // pressure 0, duration 50*50ms -> 2.5s
-  { 100, 2 }, // pressure 100, duration 150ms
+  { 100, 2 }, // pressure 100, duration 100ms
   { 0, 50 }, // pressure 0, delay 50*50ms -> 2.5s
   { 200, 3 }, // pressure 200, duration 150ms
   { 300, 5 }, // pressure 300, duration 250ms -> should trigger handle close
@@ -64,7 +78,7 @@ int _simIndex = -1;
 int _simPressure = 0;
 int _simCount = 0;
 
-#define MAX_SIMULATED_EVENTS 11
+#define MAX_SIMULATED_EVENTS sizeof(_simEvents) / sizeof(SimulatedPressure)
 #endif
 
 // default, updated by EEPROM
@@ -73,19 +87,20 @@ int setpoint = 240;
 // value of pressure sensor
 int pressure = 6;
 
-
-
 // max servo angle
 //int servo_max_angle = SERVO_MAX;
 
-// hand mode
-int mode = MODE_HOLDTIME;
+// hand operating mode
+int mode = OPERATING_MODE;
 
 int corsaservo = 0;
-//Globals Object initialization
-
 
 DeltaTime interval;
+
+#if (OPERATING_MODE == MODE_HOLDTIME)
+HandState *handState = HandStateIdleOpen::instance().enter();
+#endif
+//End Globals Objects initialization
 
 int getPressure() {
   // logic
@@ -105,101 +120,6 @@ int getPressure() {
 
   // normalized pressure
   return (raw_pressure < PRESSURE_MAX) ? raw_pressure : PRESSURE_MAX;
-}
-
-// state update function
-void updateState(int pressure) {
-  
-#if 1
-
-#else
-  _DEBUG("Entering state[%s]",_state[hand_state]);
-  
-  switch (hand_state) {
-      case HOLD_OPENING:
-          if (pressure > PRESSURE_MIN) {
-              int delta = interval.delta(INTERVAL_OPEN);
-              _DEBUG("Pressure[%d] > PRESSURE_MIN[%d], check hold interval[%d] expired[%d]",pressure, PRESSURE_MIN, delta, INTERVAL_OPEN);
-              if (delta > HOLDTIME_INTERVAL_uS) {
-                  _DEBUG("OPEN hold interval expired, start closing hand");
-                  hand_state = CLOSING;
-              }
-          } else {
-              // discard small muscle contraction and return idle
-              _DEBUG("Muscle contraction discarded, inteval too small");
-              hand_state = IDLE_OPEN;
-          }
-          break;
-      case CLOSING:
-          if (pressure > PRESSURE_MIN) {
-              _DEBUG("Pressure[%d] > PRESSURE_MIN[%d], check can continue to close hand",pressure, PRESSURE_MIN);
-              if (servo_angle < SERVO_MAX) {
-                  int magnitude = (pressure / 50) + 1;
-                  servo_angle = servo_angle + magnitude;
-                  _DEBUG("Current servo angle[%d], magnitude[%d]",servo_angle, magnitude);
-                  servo.write(servo_angle);
-              } else {
-                  _DEBUG("Current servo angle[%d], hand completely closed",servo_angle);
-                  hand_state = CLOSED;
-              }
-          } else {
-              _DEBUG("Pressure[%d] < PRESSURE_MIN[%d], stop closing hand",pressure, PRESSURE_MIN);
-              hand_state = CLOSED;
-          }
-          break;
-       case CLOSED:
-          _DEBUG("Check Pressure[%d] < PRESSURE_MIN[%d] to go in IDLE_CLOSE",pressure, PRESSURE_MIN);
-          if (pressure < PRESSURE_MIN) {
-              _DEBUG("Going in IDLE_CLOSED state");
-              hand_state = IDLE_CLOSED;
-          }
-          break;
-       case HOLD_CLOSING:
-          if (pressure > PRESSURE_MIN) {
-              _DEBUG("Pressure[%d] > PRESSURE_MIN[%d], check can close hand",pressure, PRESSURE_MIN);
-              if (interval.delta(INTERVAL_CLOSE) > HOLDTIME_INTERVAL_uS) {
-                  _DEBUG("CLOSE hold interval expired, closing hand");
-                  hand_state = OPENING;
-              }
-          } else {
-              // discard small muscle contraction and return idle
-              _DEBUG("Muscle contraction discarded, inteval too small");
-              hand_state = IDLE_CLOSED;
-          }
-          break;
-      case OPENING:
-          _DEBUG("Opening hand, servo hangle -> [%d]",SERVO_MIN);
-          servo.write(SERVO_MIN);
-          servo_angle = SERVO_MIN;
-          hand_state = OPEN;
-          break;
-      case OPEN:
-           _DEBUG("Check Pressure[%d] < PRESSURE_MIN[%d] to go in IDLE_OPEN",pressure, PRESSURE_MIN);
-          if (pressure < PRESSURE_MIN) {
-              _DEBUG("Going in IDLE_OPEN state");
-              hand_state = IDLE_OPEN;
-          }
-          break;
-      case IDLE_CLOSED:
-          if (pressure > PRESSURE_MIN) {
-              _DEBUG("Pressure[%d] > PRESSURE_MIN[%d], start hold close timer",pressure, PRESSURE_MIN);
-              hand_state = HOLD_CLOSING;
-              interval.start(INTERVAL_CLOSE);
-          }
-          break;
-      case IDLE_OPEN:
-      default:
-        if (pressure > PRESSURE_MIN) {
-          _DEBUG("Pressure[%d] > PRESSURE_MIN[%d], start hold open timer",pressure, PRESSURE_MIN);
-          hand_state = HOLD_OPENING;
-          interval.start(INTERVAL_OPEN);
-        }
-  }
-#endif
-
-  // loop delay
-  _DEBUG("Sleeping %d ms",LOOP_DELAY);
-  delay(LOOP_DELAY);
 }
 
 void setup() {
@@ -231,6 +151,10 @@ void loop () {
 
   if (mode == MODE_PROGRESSIVE)
       updateServoProgressive(pressure);
-  else
-      updateState(pressure);
+  else {
+    if (handState) { // just to be safe check pointer valid
+      _DEBUG("State[%s]", handState->getName());
+      handState = handState->update(pressure);
+    }
+  }
 }  
